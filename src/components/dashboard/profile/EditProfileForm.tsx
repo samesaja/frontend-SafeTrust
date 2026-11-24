@@ -64,8 +64,11 @@ const COUNTRY_CODES = [
   { code: "+34", flag: "🇪🇸", label: "+34" },
 ];
 
+const UNSTORED_FIELDS_NOTE_ID = "profile-unstored-fields-note";
+
 export function EditProfileForm() {
   const [form, setForm] = useState<ProfileFormData>(EMPTY_FORM);
+  const [savedDisplayName, setSavedDisplayName] = useState("");
   const [account, setAccount] = useState<AccountData>({
     createdAt: "—",
     walletAddress: "No wallet linked",
@@ -74,14 +77,15 @@ export function EditProfileForm() {
   const [isLoading, setIsLoading] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
-  // ── Read Firebase user on mount ──────────────────────────────────────────
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       if (user) {
-        const parts = (user.displayName ?? "").split(" ");
+        const currentDisplay = (user.displayName ?? "").trim();
+        const parts = currentDisplay ? currentDisplay.split(" ") : [];
         const firstName = parts[0] ?? "";
         const surnames = parts.slice(1).join(" ");
 
+        setSavedDisplayName(currentDisplay);
         setForm((prev) => ({
           ...prev,
           firstName,
@@ -108,7 +112,6 @@ export function EditProfileForm() {
             },
             (error: unknown) => {
               setAccount((current) => ({ ...current, walletAddress: null }));
-              // Without a backend, linked wallets simply aren't available.
               if (
                 error instanceof AccountApiError &&
                 error.code === "BACKEND_NOT_CONFIGURED"
@@ -126,36 +129,30 @@ export function EditProfileForm() {
     return () => unsubscribe();
   }, []);
 
-  // ── Handlers ─────────────────────────────────────────────────────────────
   const handleChange =
     (field: keyof ProfileFormData) =>
     (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
       setForm((prev) => ({ ...prev, [field]: e.target.value }));
     };
 
+  const currentDisplayName = `${form.firstName} ${form.surnames}`.trim();
+  const hasNameChanged =
+    currentDisplayName.length > 0 && currentDisplayName !== savedDisplayName;
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!hasNameChanged) return;
     setIsLoading(true);
 
     try {
       const user = auth.currentUser;
       if (!user) throw new Error("No authenticated user");
 
-      // Update Firebase displayName
       await updateProfile(user, {
-        displayName: `${form.firstName} ${form.surnames}`.trim(),
+        displayName: currentDisplayName,
       });
-
-      // TODO: wire to Hasura mutation → UPDATE public.users
-      // WHERE owner_id = user.uid
-      // SET first_name   = form.firstName,
-      //     last_name    = form.surnames,
-      //     phone        = form.phone,
-      //     country_code = form.countryCode,
-      //     location     = form.location,
-      //     summary      = form.summary
-
-      toast.success("Profile updated successfully!");
+      setSavedDisplayName(currentDisplayName);
+      toast.success("Name updated.");
     } catch {
       toast.error("Failed to update profile. Please try again.");
     } finally {
@@ -163,7 +160,6 @@ export function EditProfileForm() {
     }
   };
 
-  // ── Derive initials ───────────────────────────────────────────────────────
   const initials =
     [form.firstName[0], form.surnames[0]]
       .filter(Boolean)
@@ -184,34 +180,9 @@ export function EditProfileForm() {
     <form onSubmit={handleSubmit} className="w-full">
       <h1 className="text-2xl font-semibold mb-4">Edit profile</h1>
 
-      <div
-        className="border border-border
-                      rounded-lg p-6 space-y-6"
-      >
-        {/* Avatar + Summary */}
-        <div className="flex gap-4">
-          <AvatarUpload
-            initials={initials}
-            onFileChange={(file) =>
-              setForm((prev) => ({ ...prev, avatar: file }))
-            }
-          />
-          <div className="flex-1">
-            <Label htmlFor="summary" className="mb-1.5 block">
-              Summary
-            </Label>
-            <Textarea
-              id="summary"
-              placeholder="Write a short bio..."
-              value={form.summary}
-              onChange={handleChange("summary")}
-              className="resize-none h-20"
-            />
-          </div>
-        </div>
-
+      <div className="border border-border rounded-lg p-6 space-y-6">
         {/* Name row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
             <Label htmlFor="firstName" className="mb-1.5 block">
               First Name
@@ -236,13 +207,52 @@ export function EditProfileForm() {
           </div>
         </div>
 
+        <p
+          id={UNSTORED_FIELDS_NOTE_ID}
+          className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground"
+        >
+          Phone, location, summary and photo can&apos;t be saved yet.
+          You&apos;ll be able to edit them when your account is connected to the
+          SafeTrust backend.
+        </p>
+
+        {/* Avatar + Summary */}
+        <div className="flex gap-4">
+          <AvatarUpload
+            initials={initials}
+            disabled
+            ariaDescribedBy={UNSTORED_FIELDS_NOTE_ID}
+            onFileChange={(file) =>
+              setForm((prev) => ({ ...prev, avatar: file }))
+            }
+          />
+          <div className="flex-1 min-w-0">
+            <Label htmlFor="summary" className="mb-1.5 block">
+              Summary
+            </Label>
+            <Textarea
+              id="summary"
+              placeholder="Write a short bio..."
+              value={form.summary}
+              onChange={handleChange("summary")}
+              disabled
+              aria-describedby={UNSTORED_FIELDS_NOTE_ID}
+              className="resize-none h-20"
+            />
+          </div>
+        </div>
+
         {/* Phone + Location row */}
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <Label className="mb-1.5 block">Phone</Label>
+            <Label htmlFor="phone" className="mb-1.5 block">
+              Phone
+            </Label>
             <div className="flex gap-2">
               <select
                 aria-label="Country code"
+                aria-describedby={UNSTORED_FIELDS_NOTE_ID}
+                disabled
                 value={form.countryCode}
                 onChange={(e) =>
                   setForm((prev) => ({ ...prev, countryCode: e.target.value }))
@@ -260,10 +270,14 @@ export function EditProfileForm() {
                 ))}
               </select>
               <Input
+                id="phone"
                 value={form.phone}
                 onChange={handleChange("phone")}
                 placeholder="Phone number"
                 type="tel"
+                autoComplete="tel-national"
+                disabled
+                aria-describedby={UNSTORED_FIELDS_NOTE_ID}
               />
             </div>
           </div>
@@ -276,6 +290,8 @@ export function EditProfileForm() {
               value={form.location}
               onChange={handleChange("location")}
               placeholder="City, Country"
+              disabled
+              aria-describedby={UNSTORED_FIELDS_NOTE_ID}
             />
           </div>
         </div>
@@ -289,7 +305,7 @@ export function EditProfileForm() {
 
         {/* Save button */}
         <div className="flex justify-end">
-          <Button type="submit" disabled={isLoading}>
+          <Button type="submit" disabled={isLoading || !hasNameChanged}>
             {isLoading ? "Saving..." : "Save changes"}
           </Button>
         </div>

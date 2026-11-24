@@ -7,12 +7,16 @@ import { useRef, useState } from "react";
 interface AvatarUploadProps {
   initials?: string;
   currentAvatar?: string;
+  disabled?: boolean;
+  ariaDescribedBy?: string;
   onFileChange: (file: File) => void;
 }
 
 export function AvatarUpload({
   initials = "RV",
   currentAvatar,
+  disabled = false,
+  ariaDescribedBy,
   onFileChange,
 }: AvatarUploadProps) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -20,6 +24,7 @@ export function AvatarUpload({
   const [imgError, setImgError] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (disabled) return;
     const file = e.target.files?.[0];
     if (!file) return;
     setPreview(URL.createObjectURL(file));
@@ -49,8 +54,10 @@ export function AvatarUpload({
       </div>
       <button
         type="button"
+        disabled={disabled}
+        aria-describedby={ariaDescribedBy}
         onClick={() => inputRef.current?.click()}
-        className="absolute bottom-0 right-0 bg-background border border-border rounded-full p-1.5 shadow-sm hover:bg-accent transition-colors"
+        className="absolute bottom-0 right-0 bg-background border border-border rounded-full p-1.5 shadow-sm hover:bg-accent transition-colors disabled:cursor-not-allowed disabled:opacity-50"
         aria-label="Upload profile photo"
       >
         <Camera className="w-3.5 h-3.5 text-muted-foreground" />
@@ -59,6 +66,8 @@ export function AvatarUpload({
         ref={inputRef}
         type="file"
         accept="image/*"
+        disabled={disabled}
+        aria-describedby={ariaDescribedBy}
         className="hidden"
         onChange={handleFileChange}
       />
