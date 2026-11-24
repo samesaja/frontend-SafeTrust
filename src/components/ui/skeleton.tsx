@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 
 /**
  * A pulsing placeholder used by the route-level `loading.tsx` screens while
- * their content streams in.
+ * their content streams in. Respects `prefers-reduced-motion: reduce`.
  */
 export function Skeleton({
   className,
@@ -12,7 +12,7 @@ export function Skeleton({
 }: HTMLAttributes<HTMLDivElement>) {
   return (
     <div
-      className={cn("animate-pulse rounded-md bg-muted", className)}
+      className={cn("motion-safe:animate-pulse rounded-md bg-muted", className)}
       {...props}
     />
   );
